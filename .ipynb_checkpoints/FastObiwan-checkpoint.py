@@ -24,7 +24,7 @@ from legacypipe.survey import LegacySersicIndex
 from astrometry.util.util import lanczos3_interpolate
 
 class LegacysurveyCCDList(object):
-    def __init__(self, brickname):
+    def __init__(self, brickname, stamp_hw = 31):
         self.bricname = brickname
         #/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/
         self.survey = LegacySurveyData(survey_dir = "/dvs_ro/cfs/cdirs/cosmo/work/legacysurvey/dr9/")
@@ -34,10 +34,11 @@ class LegacysurveyCCDList(object):
         self.img_dir = "/dvs_ro/cfs/cdirs/cosmo/work/legacysurvey/dr9/images/"
         self.psf_dir = "/dvs_ro/cfs/cdirs/cosmo/work/legacysurvey/dr9/calib/psfex/"
         self.sky_dir = "/dvs_ro/cfs/cdirs/cosmo/work/legacysurvey/dr9/calib/sky/"
+        self.imghw = stamp_hw
         
     def read_sim_gal(self, sim):
-        self.ra = sim['sim_ra']
-        self.dec = sim['sim_dec']
+        self.ra = sim['ra']
+        self.dec = sim['dec']
         self.gflux = sim['sim_gflux']
         self.rflux = sim['sim_rflux']
         self.zflux = sim['sim_zflux']
@@ -47,19 +48,33 @@ class LegacysurveyCCDList(object):
         self.e2 = sim['sim_e2']
         self.sersic = sim['sim_sersic_n']
         
-    def get_source(self, src_idx):
+    def get_source(self, src_idx, position = 'radec'):
         
         brightness =  tractor.NanoMaggies(g=self.gflux[src_idx], r=self.rflux[src_idx], z=self.zflux[src_idx], order=['g', 'r', 'z'])
         shape = ellipses.EllipseE(self.shape_r[src_idx], self.e1[src_idx], self.e2[src_idx])
-        
-        if self.sersic[src_idx] == 1:
-              self.source_i = ExpGalaxy(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness, shape)
-        elif self.sersic[src_idx] == 4:
-              self.source_i = DevGalaxy(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness, shape)
-        elif self.sersic[src_idx] == 0:
-              self.source_i = PointSource(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness)
+
+        if position == 'radec':
+            if self.sersic[src_idx] == 1:
+                  self.source_i = ExpGalaxy(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness, shape)
+            elif self.sersic[src_idx] == 4:
+                  self.source_i = DevGalaxy(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness, shape)
+            elif self.sersic[src_idx] == 0:
+                  self.source_i = PointSource(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness)
+            else:
+                  self.source_i = SersicGalaxy(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness, shape, LegacySersicIndex(self.sersic[src_idx]))
+        elif position == 'pixel': 
+            pos = PixPos(self.imghw/2.-1, self.imghw/2.-1)
+            if self.sersic[src_idx] == 1:
+                  self.source_i = ExpGalaxy(pos, brightness, shape)
+            elif self.sersic[src_idx] == 4:
+                  self.source_i = DevGalaxy(pos, brightness, shape)
+            elif self.sersic[src_idx] == 0:
+                  self.source_i = PointSource(pos, brightness)
+            else:
+                  self.source_i = SersicGalaxy(pos, brightness, shape, LegacySersicIndex(self.sersic[src_idx]))
         else:
-              self.source_i = SersicGalaxy(RaDecPos(self.ra[src_idx], self.dec[src_idx]), brightness, shape, LegacySersicIndex(self.sersic[src_idx]))
+            raise ValueError("unrecognized position parameter")
+            
         self.src_ra = self.ra[src_idx]
         self.src_dec = self.dec[src_idx]
         self.brightness = brightness
@@ -72,6 +87,10 @@ class LegacysurveyCCDList(object):
         self.ccd_image_hdu = self.ccd_list.image_hdu[idx]
         self.camera = self.ccd_list.camera[idx]
         self.exptime = self.ccd_list.exptime[idx]
+        self.ccd_width = self.ccd_list.width[idx]
+        self.ccd_height = self.ccd_list.height[idx]
+        
+        
         header = fitsio.FITS(self.img_dir+self.ccd_filename)[self.ccd_image_hdu].read_header()
         self.raw_twcs = wcs_pv2sip_hdr(header, stepsize=0)
         self.ls_raw_twcs = LegacySurveyWcs(self.raw_twcs, None)
@@ -92,6 +111,7 @@ class LegacysurveyCCDList(object):
         #psf
         self.psf_fn = self.ccd_filename.replace(".fits.fz", "-psfex.fits")
         T = fits_table(self.psf_dir+self.psf_fn)
+        
         header = T.get_header()
         expnum  = self.ccd_list.expnum[ idx ]
         ccdname = self.ccd_list.ccdname[ idx ]
@@ -100,6 +120,7 @@ class LegacysurveyCCDList(object):
                                       for c in T.ccdname]))
         assert( len(I) == 1)
         Ti = T[I[0]]
+        self.psf_fwhm = Ti.psf_fwhm
         # Remove any padding
         degree = Ti.poldeg1
         # number of terms in polynomial
@@ -109,11 +130,13 @@ class LegacysurveyCCDList(object):
         psf = PixelizedPsfEx(None, psfex=psfex)
         self.raw_psf = HybridPixelizedPSF(psf, cx=0, cy=0, gauss=NCircularGaussianPSF([psf.fwhm / 2.35], [1.]))
 
+        #depth: https://github.com/legacysurvey/legacypipe/blob/main/py/legacypipe/coadds.py#L523
+
     
         
-    def set_local(self, imghw=64):
+    def set_local(self):
         
-        self.imghw = imghw
+        
         flag, xx, yy = self.raw_twcs.radec2pixelxy( self.src_ra, self.src_dec )
         x_cen = xx-1
         y_cen = yy-1
@@ -128,6 +151,10 @@ class LegacysurveyCCDList(object):
         photocal=LinearPhotoCal(1, band = self.filter)
         self.tim = Image(np.zeros( (imghw,imghw)) , invvar=np.ones( (imghw,imghw) ), wcs = subwcs, psf=subpsf, photocal = photocal )
         self.noise = np.zeros( (imghw,imghw) )
+        self.x_cen_int = x_cen_int
+        self.y_cen_int = y_cen_int
+
+        
         
     def gaussian_background(self):
         self.noise = np.random.normal(size=self.tim.shape) * self.sig1
@@ -167,6 +194,7 @@ class LegacysurveyCCDList(object):
         patch /= np.sum(patch)
         ph,pw = patch.shape
         pscale = LegacySurveyWcs(self.sub_twcs, None).pixscale / self.sub_targetwcs.pixel_scale()
+        self.pscale = pscale
 
         coph = int(np.ceil(ph * pscale))
         copw = int(np.ceil(pw * pscale))
@@ -193,12 +221,17 @@ class LegacysurveyCCDList(object):
     def finalize_tim(self):
         photocal=LinearPhotoCal(1, band = self.filter)
         noise_bkg = np.ones( (self.imghw, self.imghw) )*self.sig1
-        noise_stamp = self.clean_coimg_i/np.sqrt(self.nano2e)
+        noise_stamp = self.clean_coimg_i/self.nano2e
         noise_stamp[np.where( noise_stamp < 0)] = 0
         assert( np.all(noise_stamp) >=0 )
         noise_sq_tot = noise_bkg**2+noise_stamp
         invvar = 1./noise_sq_tot
         self.final_tim = Image(self.coimg_i , invvar=invvar, wcs = self.ls_sub_targetwcs, psf=self.copsf_i, photocal = photocal )
+
+        patch = self.copsf_i.getPointSourcePatch(16, 16).patch
+        self.psfnorm = np.sqrt(np.sum(patch**2))
+        self.detsig1 = self.sig1 / self.psfnorm
+        self.psfdetiv = 1./self.detsig1**2
     
         
 

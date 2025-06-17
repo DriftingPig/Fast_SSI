@@ -153,14 +153,11 @@ def fit_one_brick(brickname, input_catalog):
         L_CCDs = len( Obiwan_Fast.ccd_list)
         tims = []
         for j in range(L_CCDs):
-            if Obiwan_Fast.ccd_list.camera[j] != 'decam':
-                  continue
             Obiwan_Fast.init_one_ccd(j)
             Obiwan_Fast.set_local()
-            if Obiwan_Fast.x_cen_int<10 or Obiwan_Fast.x_cen_int>=Obiwan_Fast.ccd_width-10 or Obiwan_Fast.y_cen_int<10 or Obiwan_Fast.y_cen_int>=Obiwan_Fast.ccd_height-10:
-                 #this source does not overlap this ccd
-                 continue
-            
+            if Obiwan_Fast.x_cen_int<0 or Obiwan_Fast.x_cen_int>=Obiwan_Fast.ccd_width or Obiwan_Fast.y_cen_int<0 or Obiwan_Fast.y_cen_int>=Obiwan_Fast.ccd_height:
+                  #this source does not overlap this ccd
+                  continue
             Obiwan_Fast.gaussian_background()
             Obiwan_Fast.resample_image()
             Obiwan_Fast.resample_psf()
@@ -193,7 +190,6 @@ if __name__ == "__main__":
                          columns = ["brickname", "sim_ra", "sim_dec", "sim_gflux", "sim_rflux", "sim_zflux", \
                                     "sim_w1", "mw_transmission_w1", "sim_rhalf", "sim_e1", "sim_e2","sim_sersic_n"])
     brickname = '2383p305'
-    
     fit_one_brick(brickname, Obiwan_LRG)
 
 
