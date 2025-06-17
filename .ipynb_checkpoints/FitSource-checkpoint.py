@@ -125,13 +125,13 @@ def write_cat(catalog):
         T.ra = np.array(ra)
         T.dec = np.array(dec)
         T.flux_g = np.array(flux_g)
-        T.flux_r = np.array(flux_z)
+        T.flux_r = np.array(flux_r)
         T.flux_z = np.array(flux_z)
         T.e1 = np.array(e1)
         T.e2 = np.array(e2)
         T.shape_r = np.array(shape_r)
         T.sersic = np.array(sersic)
-        T.writeto("test.fits")
+        T.writeto("test2.fits")
         
 
 def fit_one_brick(brickname, input_catalog):
@@ -153,11 +153,14 @@ def fit_one_brick(brickname, input_catalog):
         L_CCDs = len( Obiwan_Fast.ccd_list)
         tims = []
         for j in range(L_CCDs):
+            if Obiwan_Fast.ccd_list.camera[j] != 'decam':
+                  continue
             Obiwan_Fast.init_one_ccd(j)
             Obiwan_Fast.set_local()
-            if Obiwan_Fast.x_cen_int<0 or Obiwan_Fast.x_cen_int>=Obiwan_Fast.ccd_width or Obiwan_Fast.y_cen_int<0 or Obiwan_Fast.y_cen_int>=Obiwan_Fast.ccd_height:
-                  #this source does not overlap this ccd
-                  continue
+            if Obiwan_Fast.x_cen_int<10 or Obiwan_Fast.x_cen_int>=Obiwan_Fast.ccd_width-10 or Obiwan_Fast.y_cen_int<10 or Obiwan_Fast.y_cen_int>=Obiwan_Fast.ccd_height-10:
+                 #this source does not overlap this ccd
+                 continue
+            
             Obiwan_Fast.gaussian_background()
             Obiwan_Fast.resample_image()
             Obiwan_Fast.resample_psf()
@@ -181,15 +184,16 @@ def fit_one_brick(brickname, input_catalog):
             dlnp,X,alpha = new_tractor.optimize()
             #print('dlnp', dlnp)
             if dlnp < 1e-3:
-                continue
+                break
         catalog.append( new_tractor.catalog[0] )
     write_cat(catalog)
 
 if __name__ == "__main__":
     Obiwan_LRG = fitsio.read("/global/cfs/cdirs/desi/survey/catalogs/image_simulations/LRG/NGC/Obiwan_LRGs.fits", \
-                         columns = ["brickname", "sim_ra", "sim_dec", "sim_gflux", "sim_rflux", "sim_zflux", \
+                         columns = ["brickname", "ra", "dec", "sim_gflux", "sim_rflux", "sim_zflux", \
                                     "sim_w1", "mw_transmission_w1", "sim_rhalf", "sim_e1", "sim_e2","sim_sersic_n"])
     brickname = '2383p305'
+    
     fit_one_brick(brickname, Obiwan_LRG)
 
 

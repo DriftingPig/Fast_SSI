@@ -141,7 +141,7 @@ class LegacysurveyCCDList(object):
         x_cen = xx-1
         y_cen = yy-1
         x_cen_int,y_cen_int = round(x_cen),round(y_cen)
-        self.radius = int(imghw/2)
+        self.radius = int(self.imghw/2)
         sx0, sx1, sy0, sy1 = x_cen_int-self.radius,x_cen_int+self.radius-1,y_cen_int-self.radius,y_cen_int+self.radius-1
         self.sx0 = sx0
         self.sy0 = sy0
@@ -149,8 +149,8 @@ class LegacysurveyCCDList(object):
         subwcs = self.ls_raw_twcs.shifted(sx0, sy0)
         subpsf = self.raw_psf.constantPsfAt((sx0+sx1)/2., (sy0+sy1)/2.)
         photocal=LinearPhotoCal(1, band = self.filter)
-        self.tim = Image(np.zeros( (imghw,imghw)) , invvar=np.ones( (imghw,imghw) ), wcs = subwcs, psf=subpsf, photocal = photocal )
-        self.noise = np.zeros( (imghw,imghw) )
+        self.tim = Image(np.zeros( (self.imghw,self.imghw)) , invvar=np.ones( (self.imghw,self.imghw) ), wcs = subwcs, psf=subpsf, photocal = photocal )
+        self.noise = np.zeros( (self.imghw,self.imghw) )
         self.x_cen_int = x_cen_int
         self.y_cen_int = y_cen_int
 
